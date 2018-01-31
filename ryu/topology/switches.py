@@ -249,6 +249,7 @@ class PortData(object):
         self.lldp_data = lldp_data
         self.timestamp = None
         self.sent = 0
+        self.delay = 0
 
     def lldp_sent(self):
         self.timestamp = time.time()
@@ -1027,3 +1028,35 @@ class Switches(app_manager.RyuApp):
 
         rep = event.EventHostReply(req.src, dpid, hosts)
         self.reply_to_request(req, rep)
+
+    @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
+    def packet_in_handler(self, ev):
+        # add code for getting LLDP packet receiving timestamp
+        recv_timestamp = time.time()
+        if not self.link_discovery:
+            return
+
+        msg = ev.msg
+        try:
+            src_dpid, src_port_no = LLDPPacket.lldp_parse(msg.data)
+        except LLDPPacket.LLDPUnknownFormat as e:
+            # This handler can receive all the packtes which can be
+            # not-LLDP packet. Ignore it silently
+            return
+
+        dst_dpid = msg.datapath.id
+        if msg.datapath.ofproto.OFP_VERSION == ofproto_v1_0.OFP_VERSION:
+            dst_port_no = msg.in_port
+        elif msg.datapath.ofproto.OFP_VERSION >= ofproto_v1_2.OFP_VERSION:
+            dst_port_no = msg.match['in_port']
+        else:
+            LOG.error('cannot accept LLDP. unsupported version. %x',
+                      msg.datapath.ofproto.OFP_VERSION)
+
+        # get the lldp delay, and save it into port_data.
+        for port in self.ports.keys():
+            if src_dpid == port.dpid and src_port_no == port.port_no:
+                send_timestamp = self.ports[port].timestamp
+                if send_timestamp:
+                    self.ports[port].delay = recv_timestamp - send_timestamp
+
