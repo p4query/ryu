@@ -138,6 +138,6 @@ CONF.register_cli_opts([
                help='source target, for quering delay'),
     cfg.StrOpt('dst', default='all', 
                help='destination target, for quering delay'),
-    cfg.StrOpt('range', default='*', 
+    cfg.StrOpt('range', default='all', 
                help='the range of substrate targets, for quering switch statics'),
 ])
